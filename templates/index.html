@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>영상 처리 모니터링</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #121212;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .main-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .stream-wrapper {
+            position: relative;
+            display: inline-block;
+            border: 2px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+            line-height: 0;
+            width: 95%;
+        }
+        .stream-wrapper img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .stream-wrapper canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+        .side-panel {
+            width: 300px;
+            min-width: 300px;
+            background: #1e1e1e;
+            border-left: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .panel-section {
+            padding: 16px;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .panel-section h3 {
+            margin-bottom: 12px;
+            font-size: 13px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .roi-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .roi-grid>div {
+            background: #2a2a2a;
+            padding: 8px 10px;
+            border-radius: 4px;
+        }
+        .roi-grid label {
+            display: block;
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 2px;
+        }
+        .roi-grid span {
+            font-size: 18px;
+            font-weight: bold;
+            color: #00ff88;
+            font-variant-numeric: tabular-nums;
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.15s;
+        }
+        .btn-primary {
+            background: #00ff88;
+            color: #121212;
+            width: 100%;
+        }
+        .btn-primary:hover { background: #00cc6a; }
+        .btn-danger {
+            background: #ff4444;
+            color: #fff;
+            width: 100%;
+            margin-top: 8px;
+        }
+        .btn-danger:hover { background: #cc3333; }
+        .interval-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .interval-row input {
+            width: 80px;
+            padding: 8px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
+        }
+        .interval-row span { color: #888; font-size: 13px; }
+        .interval-row .btn-primary { width: auto; }
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .result-table th, .result-table td {
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .result-table th {
+            color: #888;
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+            background: #1e1e1e;
+        }
+        .result-table .numbers {
+            color: #ffcc00;
+            font-weight: bold;
+        }
+        .result-table .empty {
+            color: #666;
+            text-align: center;
+        }
+        .hint {
+            font-size: 11px;
+            color: #666;
+            margin-top: 6px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 36px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #444;
+            border-radius: 20px;
+            transition: 0.2s;
+        }
+        .slider::before {
+            content: "";
+            position: absolute;
+            height: 14px; width: 14px;
+            left: 3px; bottom: 3px;
+            background: #fff;
+            border-radius: 50%;
+            transition: 0.2s;
+        }
+        .switch input:checked + .slider { background: #00ff88; }
+        .switch input:checked + .slider::before { transform: translateX(16px); }
+        .crop-container {
+            display: none;
+            margin-top: 8px;
+            border: 1px solid #444;
+            border-radius: 6px;
+            line-height: 0;
+            width: 100%;
+        }
+        .crop-container img {
+            display: block;
+            width: 100%;
+            image-rendering: pixelated;
+            zoom: 4;
+            background: #000;
+        }
+        .crop-label {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        .status-bar {
+            margin-top: auto;
+            padding: 12px 16px;
+            background: #2a2a2a;
+            font-size: 11px;
+            color: #888;
+            text-align: center;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            background: #00ff88;
+        }
+        .rotation-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        .btn-rotate {
+            padding: 10px 8px;
+            border: 2px solid #444;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            background: #2a2a2a;
+            color: #ccc;
+            transition: all 0.15s;
+        }
+        .btn-rotate:hover {
+            border-color: #00ff88;
+            color: #00ff88;
+        }
+        .btn-rotate.active {
+            border-color: #00ff88;
+            background: #00ff88;
+            color: #121212;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-panel">
+        <div class="stream-wrapper" id="streamWrapper">
+            <img id="stream" src="/video_feed" alt="Camera Stream">
+            <canvas id="overlay"></canvas>
+        </div>
+        <div id="cropContainer" class="crop-container">
+            <div class="crop-label">▼ 크롭 영상 (OCR 입력 직전 상태)</div>
+            <img id="cropStream" src="/crop_feed" alt="Crop Preview">
+        </div>
+    </div>
+
+    <div class="side-panel">
+        <div class="panel-section">
+            <h3>ROI 설정</h3>
+            <div class="roi-grid">
+                <div><label>X</label><span id="roiX">-</span></div>
+                <div><label>Y</label><span id="roiY">-</span></div>
+                <div><label>Width</label><span id="roiW">-</span></div>
+                <div><label>Height</label><span id="roiH">-</span></div>
+            </div>
+            <p class="hint">영상 위에서 드래그하여 ROI 설정</p>
+            <button class="btn-danger" onclick="resetROI()">ROI 초기화</button>
+            <div style="margin-top:12px;display:flex;align-items:center;gap:8px;">
+                <label class="switch">
+                    <input type="checkbox" id="cropToggle" onchange="toggleCrop()">
+                    <span class="slider"></span>
+                </label>
+                <span style="font-size:13px;color:#e0e0e0;">크롭 영상 보기</span>
+            </div>
+        </div>
+
+        <div class="panel-section">
+            <h3>영상 회전</h3>
+            <div class="rotation-buttons">
+                <button class="btn-rotate active" data-rot="0" onclick="setRotation(0)">0°</button>
+                <button class="btn-rotate" data-rot="90" onclick="setRotation(90)">90°</button>
+                <button class="btn-rotate" data-rot="180" onclick="setRotation(180)">180°</button>
+                <button class="btn-rotate" data-rot="270" onclick="setRotation(270)">270°</button>
+            </div>
+            <p class="hint">크롭 영역만 회전시켜 OCR 처리</p>
+        </div>
+
+        <div class="panel-section">
+            <h3>캡쳐 간격</h3>
+            <div class="interval-row">
+                <input type="number" id="intervalInp" value="5" min="0.5" step="0.5">
+                <span>초</span>
+                <button class="btn-primary" onclick="updateInterval()">적용</button>
+            </div>
+        </div>
+
+        <div class="panel-section" style="flex:1;overflow-y:auto;">
+            <h3>OCR 결과</h3>
+            <table class="result-table">
+                <thead>
+                    <tr><th>시간</th><th>숫자</th></tr>
+                </thead>
+                <tbody id="resultBody">
+                    <tr><td colspan="2" class="empty">대기 중...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="status-bar">
+            <span class="status-dot"></span> 시스템 작동 중
+        </div>
+    </div>
+
+    <script>
+        const img = document.getElementById("stream");
+        const canvas = document.getElementById("overlay");
+        const ctx = canvas.getContext("2d");
+
+        let drawing = false;
+        let startX = 0, startY = 0;
+        let currentROI = null;
+        let imgW = 0, imgH = 0;
+        let fullW = 0, fullH = 0;
+
+        function fetchROI() {
+            fetch("/api/roi")
+                .then(r => r.json())
+                .then(d => {
+                    currentROI = d.roi;
+                    if (d.frame && d.frame[0]) { fullW = d.frame[0]; fullH = d.frame[1]; }
+                    resizeCanvas();
+                    updateROIDisplay();
+                });
+        }
+        fetchROI();
+
+        function fetchConfig() {
+            fetch("/api/config")
+                .then(r => r.json())
+                .then(d => {
+                    document.getElementById("intervalInp").value = d.capture_interval;
+                    highlightRotation(d.rotation || 0);
+                });
+        }
+        fetchConfig();
+
+        function highlightRotation(deg) {
+            document.querySelectorAll(".btn-rotate").forEach(btn => {
+                btn.classList.toggle("active", parseInt(btn.dataset.rot) === deg);
+            });
+        }
+
+        function setRotation(deg) {
+            highlightRotation(deg);
+            fetch("/api/config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ rotation: deg })
+            });
+        }
+
+        function getScale() {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                sx: imgW / rect.width,
+                sy: imgH / rect.height,
+                rx: rect.width / imgW,
+                ry: rect.height / imgH
+            };
+        }
+
+        function getImageCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            const sx = imgW / rect.width;
+            const sy = imgH / rect.height;
+            return {
+                x: Math.round((e.clientX - rect.left) * sx),
+                y: Math.round((e.clientY - rect.top) * sy)
+            };
+        }
+
+        function resizeCanvas() {
+            if (fullW) {
+                imgW = fullW;
+                imgH = fullH;
+            } else if (img.naturalWidth) {
+                imgW = img.naturalWidth;
+                imgH = img.naturalHeight;
+            }
+            canvas.width = img.clientWidth;
+            canvas.height = img.clientHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawROI();
+        }
+
+        function drawROI() {
+            if (!currentROI || !imgW || !imgH) return;
+            const { rx, ry } = getScale();
+            const x = currentROI[0] * rx;
+            const y = currentROI[1] * ry;
+            const w = currentROI[2] * rx;
+            const h = currentROI[3] * ry;
+            ctx.strokeStyle = "#00ff88";
+            ctx.lineWidth = 2;
+            ctx.fillStyle = "rgba(0, 255, 136, 0.1)";
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeRect(x, y, w, h);
+        }
+
+        function updateROIDisplay() {
+            document.getElementById("roiX").textContent = currentROI ? currentROI[0] : "-";
+            document.getElementById("roiY").textContent = currentROI ? currentROI[1] : "-";
+            document.getElementById("roiW").textContent = currentROI ? currentROI[2] : "-";
+            document.getElementById("roiH").textContent = currentROI ? currentROI[3] : "-";
+            if (imgW && imgH) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawROI();
+            }
+        }
+
+        canvas.addEventListener("mousedown", e => {
+            const c = getImageCoords(e);
+            startX = c.x;
+            startY = c.y;
+            drawing = true;
+        });
+
+        canvas.addEventListener("mousemove", e => {
+            if (!drawing || !imgW || !imgH) return;
+            const c = getImageCoords(e);
+            const { rx, ry } = getScale();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawROI();
+            const x = Math.min(startX, c.x) * rx;
+            const y = Math.min(startY, c.y) * ry;
+            const w = Math.abs(c.x - startX) * rx;
+            const h = Math.abs(c.y - startY) * ry;
+            ctx.strokeStyle = "#ff4444";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 3]);
+            ctx.strokeRect(x, y, w, h);
+            ctx.setLineDash([]);
+        });
+
+        canvas.addEventListener("mouseup", e => {
+            if (!drawing) return;
+            drawing = false;
+            const c = getImageCoords(e);
+            const x = Math.min(startX, c.x);
+            const y = Math.min(startY, c.y);
+            const w = Math.abs(c.x - startX);
+            const h = Math.abs(c.y - startY);
+            if (w < 10 || h < 10) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawROI();
+                return;
+            }
+            fetch("/api/roi", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ x, y, w, h })
+            })
+            .then(r => r.json())
+            .then(d => {
+                currentROI = d.roi;
+                updateROIDisplay();
+            });
+        });
+
+        img.addEventListener("load", resizeCanvas);
+        window.addEventListener("resize", resizeCanvas);
+
+        setInterval(resizeCanvas, 2000);
+
+        function resetROI() {
+            fetch("/api/roi", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ x: 0, y: 0, w: 0, h: 0 })
+            })
+            .then(r => r.json())
+            .then(d => {
+                currentROI = null;
+                updateROIDisplay();
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            });
+        }
+
+        function toggleCrop() {
+            const container = document.getElementById("cropContainer");
+            const checked = document.getElementById("cropToggle").checked;
+            container.style.display = checked ? "block" : "none";
+        }
+
+        function updateInterval() {
+            const val = parseFloat(document.getElementById("intervalInp").value);
+            if (isNaN(val) || val < 0.5) return;
+            fetch("/api/config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ capture_interval: val })
+            });
+        }
+
+        setInterval(() => {
+            fetch("/api/results")
+                .then(r => r.json())
+                .then(d => {
+                    const tbody = document.getElementById("resultBody");
+                    if (!d.results || d.results.length === 0) {
+                        if (currentROI) {
+                            tbody.innerHTML = '<tr><td colspan="2" class="empty">아직 결과 없음</td></tr>';
+                        } else {
+                            tbody.innerHTML = '<tr><td colspan="2" class="empty">ROI를 먼저 설정하세요</td></tr>';
+                        }
+                        return;
+                    }
+                    const rows = [...d.results].reverse().map(r =>
+                        '<tr><td>' + r.time + '</td><td class="numbers">' + (r.numbers && r.numbers.length > 0 ? r.numbers.join(", ") : "-") + '</td></tr>'
+                    ).join("");
+                    tbody.innerHTML = rows;
+                });
+        }, 1000);
+    </script>
+</body>
+</html>

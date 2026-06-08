@@ -1,0 +1,14 @@
+[Unit]
+Description=Video Processing Monitor
+After=network.target
+
+[Service]
+Type=simple
+User=padmd
+WorkingDirectory=/home/padmd/videoprocessing
+ExecStart=/home/padmd/videoprocessing/venv/bin/python /home/padmd/videoprocessing/webserver.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

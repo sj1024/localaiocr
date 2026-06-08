@@ -1,0 +1,18 @@
+{
+    "camera_index": 0,
+    "capture_interval": 10,
+    "exposure_time": 200000,
+    "analogue_gain": 6.0,
+    "roi": [
+        736,
+        602,
+        345,
+        231
+    ],
+    "af_mode": -1,
+    "lens_position": 0.0,
+    "ae_enable": true,
+    "awb_enable": true,
+    "output_csv": "output.csv",
+    "rotation": 0
+}
